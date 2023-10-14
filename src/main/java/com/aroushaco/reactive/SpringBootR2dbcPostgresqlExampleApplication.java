@@ -22,6 +22,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Month;
 import java.util.*;
+import java.util.stream.IntStream;
 
 @EnableWebFlux
 //@EnableR2dbcRepositories
@@ -60,37 +61,37 @@ public class SpringBootR2dbcPostgresqlExampleApplication {
 
             courseList.add(Course.builder()
                     .name(courseNameList.get(i))
+                    .capacity(/*new Random().nextLong()*/1L)
                     .build());
         }
 
-        for (long i = 1; i <= courseList.size(); i++) {
-            for (long j = 1; j <= personList.size(); j++) {
-                if (new Random().nextInt(1, 100) % 2 == 0) {
+        Random rnd = new Random();
 
-                    personCourseList.add(new PersonCourse(i, j));
-                }
-            }
-        }
 
         Flux<Person> personFlux = personService.saveAll(personList);
         Flux<Course> courseFlux = courseService.saveAll(courseList);
-        Flux<PersonCourse> personCourseFlux = personCourseService.saveAll(personCourseList);
 
-         Flux.merge(personFlux, courseFlux, personCourseFlux).subscribe();
+        Flux.merge(personFlux, courseFlux).blockLast();
+         Flux.range(0, 10)
+                .flatMap( i -> {
+                    Person x = personList.get(rnd.nextInt(personList.size()));
+                    Course y = courseList.get(rnd.nextInt(courseList.size()));
+                    return personCourseService.save((new PersonCourse(x.getPerson_id(), y.getCourse_id())));
+                }).blockLast();
+
+        ;
 
 //        List<Person> listMono = personService.findAll().collectList();
 
-        List<Person> listMono = personFlux.collectList().block();
-        System.out.println(listMono);
-        Person person = listMono.get(2);
-        person.setName("changed");
+//        List<Person> listMono = personFlux.collectList().block();
+//        System.out.println(listMono);
+//        Person person = listMono.get(2);
+//        person.setName("changed");
 
-        Mono<Person> update = personService.update(person);
-        Person block = update.block();
+//        Mono<Person> update = personService.update(person);
+//        Person block = update.block();
 
-
-        System.out.println(personService.findById(block.getPerson_id()).block());
-
+//        System.out.println(personService.findById(block.getPerson_id()).block());
 
     }
 

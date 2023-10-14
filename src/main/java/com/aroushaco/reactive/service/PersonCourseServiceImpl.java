@@ -1,5 +1,6 @@
 package com.aroushaco.reactive.service;
 
+import com.aroushaco.reactive.exception.PersonCourseException;
 import com.aroushaco.reactive.model.Course;
 import com.aroushaco.reactive.model.PersonCourse;
 import com.aroushaco.reactive.repository.PersonCourseRepository;
@@ -9,13 +10,16 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
-public class PersonCourseServiceImpl implements PersonCourseService{
+public class PersonCourseServiceImpl implements PersonCourseService {
 
     @Autowired
-    PersonCourseRepository personCourseRepository;
+    private PersonCourseRepository personCourseRepository;
+    @Autowired
+    private CourseService courseService;
 
     @Override
     public Flux<PersonCourse> findAll() {
@@ -29,7 +33,14 @@ public class PersonCourseServiceImpl implements PersonCourseService{
 
     @Override
     public Mono<PersonCourse> save(PersonCourse personCourse) {
-        return personCourseRepository.save(personCourse);
+
+        return checkRegister(personCourse).flatMap(optionalTutorial -> {
+            if (optionalTutorial)
+                throw  new PersonCourseException("person course already exists or course capacity is full");
+
+            return personCourseRepository.save(personCourse);
+
+        });
     }
 
     @Override
@@ -57,8 +68,27 @@ public class PersonCourseServiceImpl implements PersonCourseService{
     }
 
     @Override
-    public Flux<PersonCourse> saveAll(List<PersonCourse> personCourseList){
+    public Flux<PersonCourse> saveAll(List<PersonCourse> personCourseList) {
         return personCourseRepository.saveAll(personCourseList);
+    }
+
+    public Mono<Boolean> checkRegister(PersonCourse personCourse) {
+        Long courseId = personCourse.getCourseId();
+        Long personId = personCourse.getPersonId();
+
+        Mono<Long> capacityMono = courseService.findById(courseId)
+                .map(Course::getCapacity);
+
+        Flux<PersonCourse> personCourseFlux = personCourseRepository.findPersonCourseByCourseId(courseId);
+
+        Mono<Boolean> listMonoMono = personCourseFlux.count()
+                .flatMap(count -> capacityMono.map(capacity ->
+                        count >= capacity));
+
+        Mono<Boolean> bMono = personCourseFlux
+                .any(pc -> pc.getPersonId().equals(personId));
+
+        return Mono.zip(listMonoMono, bMono, (listMono, b) -> listMono | b);
     }
 
 }
